@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with PDF</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='stylesheet.css') }}">
+</head>
+<body>
+    <div id="app">
+        <h1>Chat with PDF</h1>
+        <!-- Message or Error -->
+        {% if message %}
+        <p class="success">{{ message }}</p>
+        {% endif %}
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+        
+        <!-- File Upload Form -->
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+            <label for="file">Upload PDF:</label>
+            <input type="file" name="file" id="file" required>
+            <button type="submit">Upload</button>
+        </form>
+
+        <!-- Chat Interface -->
+        <div id="chat">
+            <textarea id="user-input" placeholder="Type your message here..."></textarea>
+            <button onclick="sendMessage()">Send</button>
+            <div id="response"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function sendMessage() {
+            const userInput = document.getElementById('user-input').value;
+            const responseDiv = document.getElementById('response');
+
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: userInput }),
+            });
+
+            const data = await response.json();
+            responseDiv.innerHTML = `<p>${data.reply}</p>`;
+        }
+    </script>
+</body>
+</html>
