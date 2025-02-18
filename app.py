@@ -1,49 +1,57 @@
 from flask import Flask, request, render_template, jsonify
-import ollama
-import PyPDF2
 import os
+import PyPDF2
+import numpy as np
+from sentence_transformers import SentenceTransformer, util
+import ollama
+import logging
 
 app = Flask(__name__)
+UPLOAD_FOLDER = "uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# Initialize the Ollama client
-client = ollama.Client()
-
-# Define the path to store uploaded PDFs
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Ensure the upload folder exists
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# Global variable to store extracted PDF text
-pdf_text = ""
+# Initialize embedding model and Ollama client
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+client = ollama.Client()
 
-# Load the desired model (ensure it's already pulled via the CLI or API)
-MODEL_NAME = "llama3.2"  # Update with the correct model name
+# Global dictionary to store uploaded PDF texts
+uploaded_texts = {}
 
-# Helper function to extract text from PDF
-def extract_text_from_pdf(pdf_file):
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Helper functions
+def extract_text_from_pdf(file_path):
+    """Extract text from the PDF file."""
     try:
-        with open(pdf_file, "rb") as file:
-            reader = PyPDF2.PdfReader(file)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text()
+        with open(file_path, "rb") as f:
+            reader = PyPDF2.PdfReader(f)
+            text = " ".join([page.extract_text() for page in reader.pages])
             return text
     except Exception as e:
         return f"Error extracting text: {str(e)}"
 
+def find_similar_context(query, pdf_text):
+    """Find the most similar context to the query in the PDF content."""
+    sentences = pdf_text.split(". ")
+    sentence_embeddings = embedding_model.encode(sentences, convert_to_tensor=True)
+    query_embedding = embedding_model.encode(query, convert_to_tensor=True)
+    similarity_scores = util.pytorch_cos_sim(query_embedding, sentence_embeddings)
+    best_idx = np.argmax(similarity_scores).item()
+    return sentences[best_idx]
+
+# Routes
 @app.route("/")
 def home():
-    """Render the chat interface."""
+    """Render the home page."""
     return render_template("chat.html")
 
 @app.route("/upload", methods=["POST"])
 def upload_pdf():
     """Handle PDF upload and extraction."""
-    global pdf_text
-
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -51,41 +59,40 @@ def upload_pdf():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    # Save the uploaded PDF file
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(filepath)
-
-    # Extract text from the uploaded PDF
-    pdf_text = extract_text_from_pdf(filepath)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+    file.save(file_path)
+    pdf_text = extract_text_from_pdf(file_path)
 
     if "Error extracting text" in pdf_text:
         return jsonify({"error": pdf_text}), 500
 
-    return jsonify({"message": "PDF uploaded and text extracted", "text": pdf_text[:500]})  # Displaying first 500 characters for brevity
+    uploaded_texts["pdf_text"] = pdf_text  # Store text in the global dictionary
+    return render_template("chat.html", message="PDF uploaded and text extracted")
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Handle chat requests."""
-    global pdf_text
+    """Handle chat queries."""
+    pdf_text = uploaded_texts.get("pdf_text")  # Retrieve PDF content
+    if not pdf_text:
+        return jsonify({"reply": "No PDF content available. Please upload a PDF first."}), 400
 
     user_input = request.json.get("message")
     if not user_input:
         return jsonify({"error": "No message provided."}), 400
 
-    # If user asks about the PDF content
-    if "pdf" in user_input.lower():
-        if not pdf_text:
-            return jsonify({"reply": "No PDF content available. Please upload a PDF first."})
-        return jsonify({"reply": f"PDF Content (first 500 characters): {pdf_text[:500]}"})
+    # Retrieve context from the PDF
+    context = find_similar_context(user_input, pdf_text)
+    logging.debug(f"Context: {context}")
 
-    # Otherwise, handle it with Ollama model as usual
+    # Send context and query to the model
+    prompt = f"The following context is extracted from the PDF:\n{context}\n\nUser's question: {user_input}"
+    logging.debug(f"Prompt: {prompt}")
     try:
-        response = client.complete(
-            model=MODEL_NAME,
-            prompt=user_input
-        )
+        response = client.generate(model="llama3.2", prompt=prompt)
+        logging.debug(f"Response: {response}")
         reply = response.get("response", "Sorry, I couldn't generate a response.")
     except Exception as e:
+        logging.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"reply": reply})
