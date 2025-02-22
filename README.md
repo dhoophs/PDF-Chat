@@ -33,3 +33,18 @@
 - Python 3.8+
 - Pip (Python package manager)
 
+---
+
+## Project Structure
+PDF-Chat/
+│
+├── app.py               # Main application logic
+├── requirements.txt     # Python dependencies
+├── templates/
+│   ├── chat.html        # HTML for the interface
+├── static/
+│   ├── stylesheet.css   # CSS for styling
+├── uploads/             # Folder to store uploaded PDFs
+
+  
+
