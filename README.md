@@ -33,8 +33,3 @@
 - Python 3.8+
 - Pip (Python package manager)
 
-### Steps
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/dhoophs/PDF-Chat.git
-   cd PDF-Chat
