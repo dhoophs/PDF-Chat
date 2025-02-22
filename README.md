@@ -1,6 +1,6 @@
 # Chat with PDF
 
-**Chat with PDF** is a Flask-based application that allows users to upload PDF files, extract their content, and ask questions about the content. The application uses natural language processing (NLP) techniques to identify the most relevant context from the document and generate meaningful responses.
+**Chat with PDF** is a Flask-based application that empowers users to interact with PDF files using Generative AI and Retrieval-Augmented Generation (RAG). Users can upload PDF files, extract their content, and ask questions about the document. By leveraging advanced natural language processing (NLP) techniques, the application identifies the most relevant context from the document and combines it with the power of Generative AI to produce accurate and meaningful responses.
 
 ---
 
